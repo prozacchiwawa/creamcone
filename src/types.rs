@@ -5,8 +5,8 @@ use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Point {
-    x: f64,
-    y: f64
+    pub x: f64,
+    pub y: f64
 }
 
 #[derive(Debug, Clone)]
@@ -30,12 +30,12 @@ pub struct Object {
     blops: Vec<Blop>,
 }
 
-const CHUNK_SIZE: i32 = 16;
+pub const CHUNK_SIZE: i32 = 16;
 
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct IPoint {
-    x: i32,
-    y: i32
+    pub x: i32,
+    pub y: i32
 }
 
 impl PartialEq for IPoint {
@@ -255,6 +255,14 @@ impl Chunk {
     pub fn setFieldValue(&mut self, pt: &IPoint, v: f64) {
         self.field[(pt.x & (CHUNK_SIZE - 1) + ((pt.y & (CHUNK_SIZE - 1)) * CHUNK_SIZE)) as usize] = v;
     }
+
+    pub fn getData(&self) -> Vec<u8> {
+        self.field.iter().map(|v| {
+            if *v > 1.0 { 255 as u8 } else if *v < 0.0 { 0 as u8 } else {
+                (255.0 * *v) as u8
+            }
+        }).collect()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -269,7 +277,7 @@ pub struct ObjectUniverse {
 
 #[derive(Debug, Clone)]
 pub struct ObjectConfiguration {
-    positions: Vec<f64>
+    pub positions: Vec<f64>
 }
 
 impl ObjectConfiguration {
@@ -325,10 +333,12 @@ impl Universe {
         }
     }
 
-    pub fn tourChunks<F>(&self, f: F)
-    where F: Fn(&IPoint, &Chunk) {
+    pub fn tourChunks<T,F>(&self, f: F) -> Vec<T>
+    where F: Fn(&IPoint, &Chunk) -> T {
+        let mut res = Vec::new();
         for (pt, c) in self.chunks.iter() {
-            f(pt, &c.borrow())
+            res.push(f(pt, &c.borrow()));
         }
+        res
     }
 }
