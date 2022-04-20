@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::mem::swap;
 use std::rc::Rc;
 
@@ -30,7 +30,7 @@ pub struct Object {
     blops: Vec<Blop>,
 }
 
-pub const CHUNK_SIZE: i32 = 16;
+pub const CHUNK_SIZE: i32 = 8;
 
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct IPoint {
@@ -65,15 +65,21 @@ pub struct Chunk {
 }
 
 fn identity() -> Vec<f64> {
-    vec!(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    vec!(1.0, 0.0, 0.0,
+         0.0, 1.0, 0.0,
+         0.0, 0.0, 1.0)
 }
 
 fn rotmatrix(v: f64) -> Vec<f64> {
-    vec!(f64::cos(v), f64::sin(v) * -1.0, 0.0, f64::sin(v), f64::cos(v), 0.0, 0.0, 0.0, 1.0)
+    vec!(f64::cos(v), f64::sin(v) * -1.0, 0.0,
+         f64::sin(v), f64::cos(v),        0.0,
+         0.0, 0.0, 1.0)
 }
 
 fn txmatrix(x: f64, y: f64) -> Vec<f64> {
-    vec!(0.0, 0.0, x, 0.0, 0.0, y, 0.0, 0.0, 1.0)
+    vec!(1.0, 0.0, x,
+         0.0, 1.0, y,
+         0.0, 0.0, 1.0)
 }
 
 fn matmult(a: &Vec<f64>, b: &Vec<f64>) -> Vec<f64> {
@@ -82,7 +88,7 @@ fn matmult(a: &Vec<f64>, b: &Vec<f64>) -> Vec<f64> {
         for j in 0..3 {
             let mut t = 0.0;
             for k in 0..3 {
-                t += a[i * 3 + j] * b[k * 3 + j];
+                t += a[i * 3 + k] * b[k * 3 + j];
             }
             res[i * 3 + j] = t;
         }
@@ -97,6 +103,16 @@ fn transform_pt(v: &Vec<f64>, pt: &Point) -> Point {
 
 fn sqr(x: f64) -> f64 { x * x }
 
+pub fn create_field_vec() -> Vec<f64> {
+    let ld = 5.0;
+    let mut result = Vec::new();
+    for i in 0..256 {
+        let ds = f64::sqrt(i as f64);
+        result.push(1.0 / (1.0 + f64::exp(ds - ld)));
+    }
+    result
+}
+
 impl Blop {
     pub fn new(pt: Point, strength: f64) -> Self {
         Blop { at: pt, strength: strength }
@@ -106,37 +122,38 @@ impl Blop {
         Blop { at: transform_pt(tx, &self.at), strength: self.strength }
     }
 
-    fn field_at(&self, pt: &Point) -> f64 {
-        let ld = 3.0;
-        let d = sqr(self.at.x - pt.x) + sqr(self.at.y - pt.y);
-        let f = self.strength / (1.0 + f64::exp((ld - d) * -1.0));
-        //println!("field from {:?} at {:?} = {}", self, pt, f);
-        f
+    fn field_at(&self, field_ref: &Vec<f64>, pt: &Point) -> f64 {
+        let dsqr = (sqr(self.at.x - pt.x) + sqr(self.at.y - pt.y)) as usize;
+        if dsqr < field_ref.len() {
+            self.strength * field_ref[dsqr]
+        } else {
+            0.0
+        }
     }
 }
 
-fn add_field(pt: &IPoint, blorps: &Vec<Blop>, chunk: &mut Chunk) {
+fn add_field(field_ref: &Vec<f64>, pt: &IPoint, blorps: &Vec<Blop>, chunk: &mut Chunk) {
     for i in 0..CHUNK_SIZE {
         for j in 0..CHUNK_SIZE {
-            let fld_pt = Point::new((i + pt.x) as f64, (j + pt.y) as f64);
+            let fpt = IPoint::new(j, i);
+            let fld_pt = Point::new((j + pt.x) as f64, (i + pt.y) as f64);
             for b in blorps {
-                let fpt = IPoint::new(j, i);
-                let fval = b.field_at(&fld_pt);
-                chunk.setFieldValue(&fpt, fval);
+                let fval = b.field_at(field_ref, &fld_pt);
+                chunk.addFieldValue(&fpt, fval);
             }
         }
     }
 }
 
-fn identify_chunks(blops: &Vec<Blop>) -> Vec<IPoint> {
-    let mut res = Vec::new();
+fn identify_chunks(blops: &Vec<Blop>) -> HashSet<IPoint> {
+    let mut res = HashSet::new();
     for b in blops.iter() {
-        let ipt = IPoint::new(b.at.x as i32, b.at.y as i32);
+        let ipt = chunkCoord(&IPoint::new(b.at.x as i32, b.at.y as i32));
         for i in -1..=1 {
             for j in -1..=1 {
-                res.push(ipt.add(IPoint::new(
-                    i * CHUNK_SIZE,
-                    j * CHUNK_SIZE
+                res.insert(ipt.add(IPoint::new(
+                    j * CHUNK_SIZE,
+                    i * CHUNK_SIZE
                 )));
             }
         }
@@ -176,10 +193,12 @@ impl Object {
                 DOFType::Linear(target) => txmatrix(target.x * v, target.y * v)
             };
 
-        matmult(&outerTransform, &initialTransform)
+        let modelTransform = txmatrix(self.anchor.x, self.anchor.y);
+
+        matmult(&outerTransform, &matmult(&modelTransform, &initialTransform))
     }
 
-    fn realize(&self, tx: &Vec<f64>, u: &mut Universe) {
+    fn realize(&self, field_ref: &Vec<f64>, tx: &Vec<f64>, u: &mut Universe) {
         let transformed_blops = self.blops.iter().map(|b| b.transform_by(tx)).collect();
         let chunks = identify_chunks(&transformed_blops);
         for c in chunks.iter() {
@@ -188,13 +207,13 @@ impl Object {
                     chunkref.replace_with(|chunk| {
                         let mut d = Chunk::dead();
                         swap(chunk, &mut d);
-                        add_field(&c, &transformed_blops, &mut d);
+                        add_field(field_ref, &c, &transformed_blops, &mut d);
                         d
                     });
                 },
                 None => {
                     let mut chunk = Chunk::new();
-                    add_field(&c, &transformed_blops, &mut chunk);
+                    add_field(field_ref, &c, &transformed_blops, &mut chunk);
                     u.setChunk(&c, chunk);
                 }
             }
@@ -252,16 +271,32 @@ impl Chunk {
         self.field[(pt.x & (CHUNK_SIZE - 1) + ((pt.y & (CHUNK_SIZE - 1)) * CHUNK_SIZE)) as usize]
     }
 
-    pub fn setFieldValue(&mut self, pt: &IPoint, v: f64) {
-        self.field[(pt.x & (CHUNK_SIZE - 1) + ((pt.y & (CHUNK_SIZE - 1)) * CHUNK_SIZE)) as usize] = v;
+    pub fn addFieldValue(&mut self, pt: &IPoint, v: f64) {
+        self.field[(pt.x & (CHUNK_SIZE - 1)) as usize + ((pt.y & (CHUNK_SIZE - 1)) * CHUNK_SIZE) as usize] += v;
     }
 
     pub fn getData(&self) -> Vec<u8> {
-        self.field.iter().map(|v| {
-            if *v > 1.0 { 255 as u8 } else if *v < 0.0 { 0 as u8 } else {
-                (255.0 * *v) as u8
-            }
-        }).collect()
+        let mut res = Vec::with_capacity(self.field.len() * 3);
+        for i in 0..self.field.len() {
+            let v = self.field[i];
+            let newv =
+                if v > 10.0 { 255 as u8 } else if v < 0.0 { 0 as u8 } else {
+                    (25.5 * v) as u8
+                };
+            res.push(255);
+            res.push(newv);
+            res.push(newv);
+            res.push(newv);
+        }
+        res
+    }
+
+    pub fn mse(&self) -> f64 {
+        let mut res = 0.0;
+        for v in self.field.iter() {
+            res += sqr(*v);
+        }
+        res
     }
 }
 
@@ -285,21 +320,21 @@ impl ObjectConfiguration {
         ObjectConfiguration { positions: vec![0.0; ou.objects.len()] }
     }
 
-    pub fn perturb(&mut self) -> Self {
+    pub fn perturb(&mut self, perturb: f64) -> Self {
         let mut next = self.clone();
         for i in 0..self.positions.len() {
             let randval: f64 = rand::random();
-            next.positions[i] = next.positions[i] + (randval - 0.5) * 0.001;
+            next.positions[i] += ((randval - 0.5) * perturb);
         }
         next
     }
 
     // render the configuration into a universe.
-    pub fn realize(&self, ou: &ObjectUniverse) -> Universe {
+    pub fn realize(&self, field_ref: &Vec<f64>, ou: &ObjectUniverse) -> Universe {
         let mut u = Universe::new();
         for o in ou.objects.iter() {
             let transform = o.getTransform(self, ou);
-            o.realize(&transform, &mut u);
+            o.realize(field_ref, &transform, &mut u);
         }
         u
     }
@@ -307,10 +342,26 @@ impl ObjectConfiguration {
     fn getPosition(&self, idx: usize) -> f64 {
         self.positions[idx]
     }
+
+    pub fn plus(&self, other: &ObjectConfiguration) -> ObjectConfiguration {
+        let mut t = ObjectConfiguration { positions: self.positions.clone() };
+        for i in 0..self.positions.len() {
+            t.positions[i] += other.positions[i];
+        }
+        t
+    }
+
+    pub fn minus(&self, other: &ObjectConfiguration) -> ObjectConfiguration {
+        let mut t = ObjectConfiguration { positions: self.positions.clone() };
+        for i in 0..self.positions.len() {
+            t.positions[i] -= other.positions[i];
+        }
+        t
+    }
 }
 
 fn chunkCoord(pt: &IPoint) -> IPoint {
-    IPoint::new(pt.x - pt.x % CHUNK_SIZE, pt.y - pt.y % CHUNK_SIZE)
+    IPoint::new(pt.x & !(CHUNK_SIZE - 1), pt.y & !(CHUNK_SIZE - 1))
 }
 
 impl Universe {
@@ -323,12 +374,13 @@ impl Universe {
     }
 
     pub fn setChunk(&mut self, pt: &IPoint, newchunk: Chunk) {
-        match self.chunks.get(&chunkCoord(pt)) {
+        let cpt = chunkCoord(pt);
+        match self.chunks.get(&cpt) {
             Some(chunkcell) => {
                 chunkcell.replace_with(|_| newchunk);
             },
             None => {
-                self.chunks.insert(chunkCoord(pt), RefCell::new(newchunk));
+                self.chunks.insert(cpt, RefCell::new(newchunk));
             }
         }
     }
@@ -341,4 +393,63 @@ impl Universe {
         }
         res
     }
+
+    pub fn mse(&self) -> f64 {
+        let se = self.tourChunks(|pt,c| c.mse());
+        let mut sum = 0.0;
+        for v in se.iter() { sum += *v; }
+        sum
+    }
+}
+
+const GENERATIONS: usize = 2;
+const FANOUT: usize = 12;
+const FANIN: usize = 3;
+
+pub fn update_simulation(
+    field_ref: &Vec<f64>,
+    c_: &ObjectConfiguration,
+    ou: &ObjectUniverse
+) -> ObjectConfiguration {
+    let mut c = c_.clone();
+    let mut ancestors = Vec::new();
+    let mut copied_ancestors = Vec::new();
+    let mut mses = Vec::new();
+    let mut perturb = 0.02;
+
+    for i in 0..FANIN {
+        copied_ancestors.push(c.perturb(perturb));
+    }
+
+    for g in 0..GENERATIONS {
+        perturb *= 0.8;
+
+        ancestors.clear();
+        for a in copied_ancestors.iter() {
+            for j in 0..FANOUT / FANIN {
+                if j != 0 {
+                    ancestors.push(a.clone().perturb(perturb));
+                } else {
+                    ancestors.push(a.clone());
+                }
+            }
+        }
+
+        mses.clear();
+        for i in 0..ancestors.len() {
+            let a = &ancestors[i];
+            let u = a.realize(field_ref, ou);
+            mses.push((i, u.mse()));
+        }
+        mses.sort_by(|a,b| a.1.partial_cmp(&b.1).unwrap());
+
+        println!("{}:", g);
+        copied_ancestors.clear();
+        for i in 0..FANIN {
+            copied_ancestors.push(ancestors[mses[0].0].clone());
+            println!(" {:?}", mses[i]);
+        }
+    }
+
+    return ancestors[mses[0].0].clone();
 }

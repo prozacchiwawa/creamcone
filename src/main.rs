@@ -19,7 +19,10 @@ use creamcone::types::{
     Object,
     ObjectUniverse,
     ObjectConfiguration,
-    Universe
+    Universe,
+
+    update_simulation,
+    create_field_vec
 };
 
 fn main() {
@@ -30,10 +33,98 @@ fn main() {
         None,
         DOFType::Rotation,
         vec!(
-            Blop::new(Point::new(100.0, 0.0), 1.0),
-            Blop::new(Point::new(0.0, 100.0), 0.5),
-            Blop::new(Point::new(-100.0, 0.0), 2.0),
-            Blop::new(Point::new(0.0, -100.0), 3.0)
+            Blop::new(Point::new(100.0, 0.0), 10.0),
+            Blop::new(Point::new(60.0, 60.0), 10.0),
+            Blop::new(Point::new(0.0, 100.0), 10.0),
+            Blop::new(Point::new(-60.0, 60.0), 10.0),
+            Blop::new(Point::new(-100.0, 0.0), 10.0),
+            Blop::new(Point::new(60.0, -60.0), 10.0),
+            Blop::new(Point::new(0.0, -100.0), 10.0),
+            Blop::new(Point::new(-60.0, -60.0), 10.0),
+        )
+    ));
+    ou.add(Object::new(
+        &"test2".to_string(),
+        &Point::new(-197.0, 10.0),
+        None,
+        DOFType::Rotation,
+        vec!(
+            Blop::new(Point::new(95.0, 0.0), 10.0),
+            Blop::new(Point::new(100.0, 0.0), 10.0),
+            Blop::new(Point::new(105.0, 0.0), 10.0),
+            Blop::new(Point::new(110.0, 0.0), 10.0),
+            Blop::new(Point::new(115.0, 0.0), 10.0),
+            Blop::new(Point::new(120.0, 0.0), 10.0),
+            Blop::new(Point::new(125.0, 0.0), 10.0),
+            Blop::new(Point::new(0.0, 95.0), 10.0),
+            Blop::new(Point::new(0.0, 100.0), 10.0),
+            Blop::new(Point::new(0.0, 105.0), 10.0),
+            Blop::new(Point::new(0.0, 110.0), 10.0),
+            Blop::new(Point::new(0.0, 115.0), 10.0),
+            Blop::new(Point::new(0.0, 120.0), 10.0),
+            Blop::new(Point::new(0.0, 125.0), 10.0),
+            Blop::new(Point::new(-95.0, 0.0), 10.0),
+            Blop::new(Point::new(-100.0, 0.0), 10.0),
+            Blop::new(Point::new(-105.0, 0.0), 10.0),
+            Blop::new(Point::new(-110.0, 0.0), 10.0),
+            Blop::new(Point::new(-115.0, 0.0), 10.0),
+            Blop::new(Point::new(-120.0, 0.0), 10.0),
+            Blop::new(Point::new(-125.0, 0.0), 10.0),
+            Blop::new(Point::new(0.0, -95.0), 10.0),
+            Blop::new(Point::new(0.0, -100.0), 10.0),
+            Blop::new(Point::new(0.0, -105.0), 10.0),
+            Blop::new(Point::new(0.0, -110.0), 10.0),
+            Blop::new(Point::new(0.0, -115.0), 10.0),
+            Blop::new(Point::new(0.0, -120.0), 10.0),
+            Blop::new(Point::new(0.0, -125.0), 10.0),
+            Blop::new(Point::new(47.5, 82.27), 10.0),
+            Blop::new(Point::new(50.0, 86.6), 10.0),
+            Blop::new(Point::new(52.5, 90.3), 10.0),
+            Blop::new(Point::new(55.0, 95.26), 10.0),
+            Blop::new(Point::new(57.5, 99.95), 10.0),
+            Blop::new(Point::new(60.0, 103.92), 10.0),
+            Blop::new(Point::new(82.27, 47.5), 10.0),
+            Blop::new(Point::new(86.6, 50.0), 10.0),
+            Blop::new(Point::new(90.3, 52.5), 10.0),
+            Blop::new(Point::new(95.26, 55.0), 10.0),
+            Blop::new(Point::new(99.95, 57.5), 10.0),
+            Blop::new(Point::new(103.92, 60.0), 10.0),
+            Blop::new(Point::new(-47.5, 82.27), 10.0),
+            Blop::new(Point::new(-50.0, 86.6), 10.0),
+            Blop::new(Point::new(-52.5, 90.3), 10.0),
+            Blop::new(Point::new(-55.0, 95.26), 10.0),
+            Blop::new(Point::new(-57.5, 99.95), 10.0),
+            Blop::new(Point::new(-60.0, 103.92), 10.0),
+            Blop::new(Point::new(82.27, -47.5), 10.0),
+            Blop::new(Point::new(86.6, -50.0), 10.0),
+            Blop::new(Point::new(90.3, -52.5), 10.0),
+            Blop::new(Point::new(95.26, -55.0), 10.0),
+            Blop::new(Point::new(99.95, -57.5), 10.0),
+            Blop::new(Point::new(103.92, -60.0), 10.0),
+            Blop::new(Point::new(47.5, -82.27), 10.0),
+            Blop::new(Point::new(50.0, -86.6), 10.0),
+            Blop::new(Point::new(52.5, -90.3), 10.0),
+            Blop::new(Point::new(55.0, -95.26), 10.0),
+            Blop::new(Point::new(57.5, -99.95), 10.0),
+            Blop::new(Point::new(60.0, -103.92), 10.0),
+            Blop::new(Point::new(-82.27, 47.5), 10.0),
+            Blop::new(Point::new(-86.6, 50.0), 10.0),
+            Blop::new(Point::new(-90.3, 52.5), 10.0),
+            Blop::new(Point::new(-95.26, 55.0), 10.0),
+            Blop::new(Point::new(-99.95, 57.5), 10.0),
+            Blop::new(Point::new(-103.92, 60.0), 10.0),
+            Blop::new(Point::new(-47.5, -82.27), 10.0),
+            Blop::new(Point::new(-50.0, -86.6), 10.0),
+            Blop::new(Point::new(-52.5, -90.3), 10.0),
+            Blop::new(Point::new(-55.0, -95.26), 10.0),
+            Blop::new(Point::new(-57.5, -99.95), 10.0),
+            Blop::new(Point::new(-60.0, -103.92), 10.0),
+            Blop::new(Point::new(-82.27, -47.5), 10.0),
+            Blop::new(Point::new(-86.6, -50.0), 10.0),
+            Blop::new(Point::new(-90.3, -52.5), 10.0),
+            Blop::new(Point::new(-95.26, -55.0), 10.0),
+            Blop::new(Point::new(-99.95, -57.5), 10.0),
+            Blop::new(Point::new(-103.92, -60.0), 10.0),
         )
     ));
 
@@ -60,6 +151,8 @@ fn main() {
     let mut i = 0;
 
     let mut c = ObjectConfiguration::new(&ou);
+    let mut momentum = ObjectConfiguration::new(&ou);
+    let field_ref = create_field_vec();
 
     'running: loop {
         i = (i + 1) % 255;
@@ -76,8 +169,12 @@ fn main() {
         }
 
         // The rest of the game loop goes here...
-        c.positions[0] += 0.01;
-        let u = c.realize(&ou);
+        c.positions[0] += 0.005;
+        c = c.plus(&momentum);
+        let new_c = update_simulation(&field_ref, &c, &ou);
+        let momentum = new_c.minus(&c);
+        c = new_c;
+        let u = c.realize(&field_ref, &ou);
 
         let mut chunkdata = u.tourChunks(|pt,c| (pt.clone(),c.getData()));
         for i in 0..chunkdata.len() {
@@ -86,8 +183,8 @@ fn main() {
                 &mut chunkdata[i].1,
                 CHUNK_SIZE as u32,
                 CHUNK_SIZE as u32,
-                CHUNK_SIZE as u32,
-                PixelFormatEnum::RGB332
+                (CHUNK_SIZE * 4) as u32,
+                PixelFormatEnum::ARGB32,
             ).unwrap();
             let texture = texture_creator.create_texture_from_surface(s).unwrap();
             canvas.copy(
@@ -103,6 +200,5 @@ fn main() {
         }
 
         canvas.present();
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
