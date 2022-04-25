@@ -122,6 +122,20 @@ impl Blop {
         Blop { at: transform_pt(tx, &self.at), strength: self.strength }
     }
 
+    fn identify_chunks(&self) -> HashSet<IPoint> {
+        let mut res = HashSet::new();
+        let ipt = chunkCoord(&IPoint::new(self.at.x as i32, self.at.y as i32));
+        for i in -1..=1 {
+            for j in -1..=1 {
+                res.insert(ipt.add(IPoint::new(
+                    j * CHUNK_SIZE,
+                    i * CHUNK_SIZE
+                )));
+            }
+        }
+        res
+    }
+
     fn field_at(&self, field_ref: &Vec<f64>, pt: &Point) -> f64 {
         let dsqr = (sqr(self.at.x - pt.x) + sqr(self.at.y - pt.y)) as usize;
         if dsqr < field_ref.len() {
@@ -132,33 +146,15 @@ impl Blop {
     }
 }
 
-fn add_field(field_ref: &Vec<f64>, pt: &IPoint, blorps: &Vec<Blop>, chunk: &mut Chunk) {
+fn add_field(field_ref: &Vec<f64>, pt: &IPoint, b: &Blop, chunk: &mut Chunk) {
     for i in 0..CHUNK_SIZE {
         for j in 0..CHUNK_SIZE {
             let fpt = IPoint::new(j, i);
             let fld_pt = Point::new((j + pt.x) as f64, (i + pt.y) as f64);
-            for b in blorps {
-                let fval = b.field_at(field_ref, &fld_pt);
-                chunk.addFieldValue(&fpt, fval);
-            }
+            let fval = b.field_at(field_ref, &fld_pt);
+            chunk.addFieldValue(&fpt, fval);
         }
     }
-}
-
-fn identify_chunks(blops: &Vec<Blop>) -> HashSet<IPoint> {
-    let mut res = HashSet::new();
-    for b in blops.iter() {
-        let ipt = chunkCoord(&IPoint::new(b.at.x as i32, b.at.y as i32));
-        for i in -1..=1 {
-            for j in -1..=1 {
-                res.insert(ipt.add(IPoint::new(
-                    j * CHUNK_SIZE,
-                    i * CHUNK_SIZE
-                )));
-            }
-        }
-    }
-    res
 }
 
 impl Object {
@@ -199,22 +195,24 @@ impl Object {
     }
 
     fn realize(&self, field_ref: &Vec<f64>, tx: &Vec<f64>, u: &mut Universe) {
-        let transformed_blops = self.blops.iter().map(|b| b.transform_by(tx)).collect();
-        let chunks = identify_chunks(&transformed_blops);
-        for c in chunks.iter() {
-            match u.getChunk(c) {
-                Some(chunkref) => {
-                    chunkref.replace_with(|chunk| {
-                        let mut d = Chunk::dead();
-                        swap(chunk, &mut d);
-                        add_field(field_ref, &c, &transformed_blops, &mut d);
-                        d
-                    });
-                },
-                None => {
-                    let mut chunk = Chunk::new();
-                    add_field(field_ref, &c, &transformed_blops, &mut chunk);
-                    u.setChunk(&c, chunk);
+        let transformed_blops: Vec<Blop> = self.blops.iter().map(|b| b.transform_by(tx)).collect();
+        for b in transformed_blops.iter() {
+            let chunks = b.identify_chunks();
+            for c in chunks.iter() {
+                match u.getChunk(c) {
+                    Some(chunkref) => {
+                        chunkref.replace_with(|chunk| {
+                            let mut d = Chunk::dead();
+                            swap(chunk, &mut d);
+                            add_field(field_ref, &c, &b, &mut d);
+                            d
+                        });
+                    },
+                    None => {
+                        let mut chunk = Chunk::new();
+                        add_field(field_ref, &c, &b, &mut chunk);
+                        u.setChunk(&c, chunk);
+                    }
                 }
             }
         }
@@ -402,7 +400,7 @@ impl Universe {
     }
 }
 
-const GENERATIONS: usize = 2;
+const GENERATIONS: usize = 1;
 const FANOUT: usize = 12;
 const FANIN: usize = 3;
 
